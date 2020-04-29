@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -12,59 +13,106 @@ import (
 	"strings"
 )
 
+// UUIDRegex is the regex to find UUIDs
+const UUIDRegex = `([0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12})`
+
+// TrUUIDRegex is the simple regex to find trimmed UUIDs
+const TrUUIDRegex = `([0-9a-f]{32})`
+
 func main() {
-	// current directory or the first argument
-	root := "."
-	if len(os.Args) > 1 {
-		root = os.Args[1]
-	}
+	// yey flags
+	uuidP := flag.String("uuid", "", "UUID to convert")
+	helpP := flag.Bool("help", false, "help?")
+	fileP := flag.String("file", "", "Specify a file to change")
+	dirP := flag.String("dir", ".", "Directory to scan for files")
+	extP := flag.String("ext", "", "Only scan these extensions")
+	recursiveP := flag.Bool("r", false, "Scan directory recursive")
+	simulateP := flag.Bool("simulate", false, "Don't change files, only simulate the process")
+	flag.Parse()
 
-	// just walk through all files and alter them
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if info.IsDir() {
-			return nil
-		}
-
-		if filepath.Ext(path) == ".json" {
-			alterFile(path)
-		}
-		return nil
-	})
-	if err != nil {
-		panic(err)
-	}
-}
-
-func alterFile(file string) {
-	re := regexp.MustCompile(`SkullOwner:\{Id:\\"([0-9a-f-]{36})\\"`)
-
-	// don't pass a wrong formatted file
-	json, err := ioutil.ReadFile(file)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// skip file if no match was found
-	if len(re.FindSubmatch(json)) < 2 {
+	if *helpP {
+		println("this unholy place has no help")
 		return
 	}
 
-	intArray, err := convertUUID(string(re.FindSubmatch(json)[1]))
-	if err != nil {
-		panic(err)
+	// do have to deal with arguments?
+	if len(os.Args) > 1 {
+		var r *regexp.Regexp
+
+		var uuid *string = &os.Args[1]
+		if *uuidP != "" {
+			uuid = uuidP
+		}
+
+		if matched, _ := regexp.MatchString(UUIDRegex, *uuid); matched {
+			r = regexp.MustCompile(UUIDRegex) // UUID
+		} else if matched, _ := regexp.MatchString(TrUUIDRegex, *uuid); matched {
+			r = regexp.MustCompile(TrUUIDRegex) // Trimmed UUID
+		}
+
+		if r != nil {
+			// return the converted UUID
+			intArray, _ := convertUUID(r.FindStringSubmatch(*uuid)[0])
+			fmt.Println(stringifyArray(intArray))
+			return
+		}
 	}
 
-	// replace old UUID with int_array format
-	json = re.ReplaceAll(json, []byte("SkullOwner:{Id:"+parseUUIDArray(intArray)))
+	if *fileP != "" {
+		alterFile(*fileP, *simulateP)
+	} else {
+		// just walk through all files and alter them
+		err := filepath.Walk(*dirP, func(path string, info os.FileInfo, err error) error {
+			if info.Name() == ".git" || (!*recursiveP && path != "." && info.IsDir()) {
+				return filepath.SkipDir
+			}
 
-	fmt.Print(file + " updated.")
+			if info.IsDir() || filepath.Ext(path) == ".exe" {
+				return nil
+			}
 
-	// your original file is now rip
-	ioutil.WriteFile(file, json, 0666)
+			if *extP == "" || filepath.Ext(path) == *extP {
+				alterFile(path, *simulateP)
+			}
+			return nil
+		})
+		if err != nil {
+			panic(err)
+		}
+	}
 }
 
-func parseUUIDArray(uuid [4]int32) string {
+func alterFile(file string, simulate bool) {
+	re := regexp.MustCompile(UUIDRegex)
+
+	rFile, err := ioutil.ReadFile(file)
+
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	// skip file if no match was found
+	if len(re.FindSubmatch(rFile)) < 2 {
+		fmt.Println(file + " skipped.")
+		return
+	}
+
+	// replace UUID with int_array format
+	rFile = re.ReplaceAllFunc(rFile, func(match []byte) []byte {
+		intArray, _ := convertUUID(string(re.FindSubmatch(match)[1]))
+		return []byte(stringifyArray(intArray))
+	})
+
+	fmt.Println(file + " updated.")
+
+	if !simulate {
+		// your original file is now rip
+		ioutil.WriteFile(file, rFile, 0666)
+	}
+}
+
+func stringifyArray(uuid [4]int32) string {
 	parsed := "[I;"
 
 	for i, n := range uuid {
@@ -92,11 +140,7 @@ func convertUUID(uuid string) ([4]int32, error) {
 		slice := uuid[i*8 : i*8+8]
 
 		// convert hex to int64 because stupid
-		n, err := strconv.ParseInt(slice, 16, 64)
-		if err != nil {
-			// fuck you
-			return uuidIntArray, err
-		}
+		n, _ := strconv.ParseInt(slice, 16, 64)
 
 		// convert int64 to int32 because stupid
 		uuidIntArray[i] = int32(n)
