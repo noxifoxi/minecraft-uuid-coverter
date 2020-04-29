@@ -1,3 +1,5 @@
+![Preview](preview.png)
+
 # minecraft-UUID-coverter
 Converts Minecraft UUID into the 1.16 int-array format.
 
