@@ -1,7 +1,7 @@
 ![Preview](preview.png)
 
-# minecraft-UUID-coverter
-Converts Minecraft UUID into the 1.16 int-array format.
+# minecraft-uuid-coverter
+Converting UUID to the Minecraft 1.16+ int-array format.
 
 ## Usage:
 ```cmd
@@ -15,7 +15,7 @@ Scans the current directory looking for uuids in files (don't do this if you don
 ```cmd
 uuidc <UUID>
 ```
-Convert the UUID and prints the converted int array
+Printing the converted UUID as an int array
 
 ---
 
@@ -32,8 +32,8 @@ uuidc <-flags>
 Flags:
 - `-uuid` - look above
 - `-help` - no
-- `-file=<file>` - specify a file to change
+- `-file=<file>` - specify a file which should be converted
 - `-dir=<directory>` - specify a directory to scan
 - `-ext=<extension>` - only include files with that extension (include the .)
 - `-r` - scan directory recursive
-- `-simulate` - don't do anything, just shows you what would be done
+- `-simulate` - don't do anything, theoretical changes are shown
